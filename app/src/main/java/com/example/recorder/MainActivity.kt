@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
@@ -19,40 +20,45 @@ import com.example.recorder.databinding.ActivityMainBinding
 import java.io.IOException
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(),OnTimerTickListener {
     companion object {
         private const val REQUEST_RECORD_AUDIO_CODE = 200
     }
-    private var recoder:MediaRecorder?=null
-    private var fileName:String=""
+    private lateinit var timer:Timer
+    private var recoder: MediaRecorder? = null
+    private var player: MediaPlayer? = null
+    private var fileName: String = ""
     private lateinit var binding: ActivityMainBinding
 
     // 상태 관리 : 릴리즈 ->녹음중 -> 저장(릴리즈)
     //릴리즈 ->재생 -> 릴리즈
-    private enum class State{
-        RELEASE,RECODINGRECODING,PLAING
+    private enum class State {
+        RELEASE, RECODINGRE, PLAING
     }
-    private var state:State = State.RELEASE
+
+    private var state: State = State.RELEASE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        fileName="${externalCacheDir?.absolutePath}/audiorecordtest.3gp" //$(externalCacheDir?.absolutePath}절대경로
-
-
+        fileName =
+            "${externalCacheDir?.absolutePath}/audiorecordtest.3gp" //$(externalCacheDir?.absolutePath}절대경로
+        timer=Timer(this)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
 
         setContentView(binding.root)
 
-        binding.recordButton.setOnClickListener {
-            when(state){
-                State.RELEASE->{
+        binding.recordButton.setOnClickListener {//녹음버튼
+            when (state) {
+                State.RELEASE -> {
                     record() //녹음 기능
                 }
-                State.RECODINGRECODING ->{
+
+                State.RECODINGRE -> {
                     onRecord(false)
                 }
-                State.PLAING->{
+
+                State.PLAING -> {
 
                 }
 
@@ -60,6 +66,32 @@ class MainActivity : AppCompatActivity() {
             }
 
 
+        }
+        binding.playButton.setOnClickListener {//재생버튼
+            when (state) {
+                State.RELEASE -> {
+                    onPlay(true)
+                }
+
+                else -> {
+                    //do nothing
+                }
+
+            }
+        }
+        binding.playButton.isEnabled=false
+        binding.playButton.alpha=0.3f
+        binding.stopButton.setOnClickListener {
+            when (state) {
+
+                State.PLAING -> {
+                    onPlay(false)
+                }
+
+                else -> {
+                    //do nothing
+                }
+            }
         }
 
     }
@@ -88,7 +120,7 @@ class MainActivity : AppCompatActivity() {
             }.setNegativeButton("취소") { dialogInterface, _ -> dialogInterface.cancel() }.show()
     }
 
-    private fun record(){
+    private fun record() {
         when {
             ContextCompat.checkSelfPermission(
                 this,
@@ -159,30 +191,42 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun onRecord(start:Boolean) =if(start){
+    private fun onRecord(start: Boolean) = if (start) {
         startRecoding()
-    }else {
+    } else {
         stopRecoding()
     }
+
+    private fun onPlay(start: Boolean) = if (start) {
+        startPlaing()
+    } else {
+        stopPlaing()
+    }
+
     private fun startRecoding() {
 //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { 30버전 이상부터 사용가능해서 빨간줄
 //            recoder= MediaRecorder(this) //버전 별로 활용해주는 방법
 //        }
-        state=State.RECODINGRECODING
-        recoder= MediaRecorder().apply {
+        state = State.RECODINGRE
+        recoder = MediaRecorder().apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)//MediaRecorder의 마이크를 사용하겠다는 뜻
             setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
             setOutputFile(fileName)
             setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
 
-            try{
+            try {
                 prepare()
-            }catch (e: IOException){
-                Log.e("APP","prepare() falied $e")
+            } catch (e: IOException) {
+                Log.e("APP", "prepare() falied $e")
             }
 
             start()
         }
+        binding.waveformView.clearData()
+        timer.start()
+        //증폭 받아오기
+        recoder?.maxAmplitude?.toFloat()
+
 
         binding.recordButton.setImageDrawable(//클릭시 이미지 변환
             ContextCompat.getDrawable(
@@ -190,33 +234,82 @@ class MainActivity : AppCompatActivity() {
                 R.drawable.baseline_stop_24
             )
         )
-        binding.recordButton.imageTintList= ColorStateList.valueOf(Color.BLACK)
+        binding.recordButton.imageTintList = ColorStateList.valueOf(Color.BLACK)
         //만약 리소스에서 내가 설정한 색 갖고오고 싶으면
 //        ContextCompat.getColor(this,R.color.black)
 
-        binding.playButton.isEnabled=false //재생버튼시 플레이버튼 비활성화
-        binding.playButton.alpha=0.3f //흐림도 표시
+        binding.playButton.isEnabled = false //재생버튼시 플레이버튼 비활성화
+        binding.playButton.alpha = 0.3f //흐림도 표시
     }
 
-    private fun stopRecoding(){
+    private fun stopRecoding() {
         recoder?.apply {
             stop()
             release()
         }
-        recoder=null
-        state=State.RELEASE
-
+        recoder = null
+        state = State.RELEASE
+        timer.stop()
         binding.recordButton.setImageDrawable(//클릭시 이미지 변환
             ContextCompat.getDrawable(
                 this,
                 R.drawable.baseline_fiber_manual_record_24
             )
         )
-        binding.recordButton.imageTintList= ColorStateList.valueOf(Color.RED)
-        binding.playButton.isEnabled=true //재생버튼시 플레이버튼 비활성화
-        binding.playButton.alpha=1f
+        binding.recordButton.imageTintList = ColorStateList.valueOf(Color.RED)
+        binding.playButton.isEnabled = true //재생버튼시 플레이버튼 비활성화
+        binding.playButton.alpha = 1f
     }
 
+    private fun startPlaing() {
+        state = State.PLAING
+
+        player = MediaPlayer().apply {
+
+            try {//혹시 모를 ioexception
+                setDataSource(fileName)
+                prepare() //준비 함수
+            } catch (e: IOException) {
+                Log.e("APP", "media player prepare fail $e")
+            }
+            start()
+        }
+        binding.waveformView.clearWave()
+        timer.start()
+        player?.setOnCompletionListener {stopPlaing()   }//재생이 다 완료 됐을 시
+        binding.recordButton.isEnabled = false //재생버튼시 플레이버튼 비활성화
+        binding.recordButton.alpha = 0.3f //흐림도 표시
+
+    }
+
+    private fun stopPlaing() {
+        state = State.RELEASE
+
+        player?.release()
+        player = null
+
+        binding.recordButton.isEnabled = true //false일땐  활성화
+        binding.recordButton.alpha = 1f //
+
+        timer.stop()
+    }
+
+    override fun OnTick(duration: Long) {
+        val millisecond=duration%1000
+        val second=(duration/1000)%60
+        val minute = (duration/1000/60)
+        binding.timerTextView.text=String.format("%02d:%02d.%02d",minute,second,millisecond/10)
+
+
+        if(state==State.PLAING){
+            binding.waveformView.replayAmplitude()
+
+        }else if(state==State.RECODINGRE){
+            binding.waveformView.addAmplitude(recoder?.maxAmplitude?.toFloat()?:0f)
+        }
+
+
+    }
 }
 
 

@@ -19,14 +19,16 @@
         app:layout_constraintTop_toTopOf="parent"
         />
 
-    <View
+    <com.example.recorder.WaveformView
         android:id="@+id/waveformView"
         android:layout_width="0dp"
         android:layout_height="250dp"
         app:layout_constraintBottom_toTopOf="@id/recordButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:background="#DECAF4"
+        />
 
     <ImageView
         android:id="@+id/recordButton"
